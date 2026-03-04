@@ -42,6 +42,7 @@ const DIR_HANDLE_KEY = "archiveDirHandle";
 const UI_CONFIG_KEY = "story-ui-config";
 let currentStory = "";
 let currentKeywords = [];
+let currentGeneratedType = "storiella";
 let keywordCount = MIN_KEYWORDS;
 let progressTimer = null;
 let linkedTxtFiles = [];
@@ -366,13 +367,21 @@ function sanitizeForFilename(text) {
 
 function buildStoryFilename() {
   const now = new Date();
-  const datePart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}`;
+  const datePart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}-${String(now.getSeconds()).padStart(2, "0")}`;
   const promptWordsPart = currentKeywords
     .map((word) => sanitizeForFilename(word))
     .filter(Boolean)
     .join("-");
 
-  return `storia-${promptWordsPart || "ai"}-${datePart}.txt`;
+  const typePrefixMap = {
+    storiella: "storiella",
+    poesia: "poesia",
+    aforisma: "aforismi",
+    favola: "favola",
+  };
+  const filePrefix = typePrefixMap[currentGeneratedType] || "testo";
+
+  return `${filePrefix}-${promptWordsPart || "ai"}-${datePart}.txt`;
 }
 
 function downloadStoryAsTxtFallback(filename) {
@@ -462,6 +471,7 @@ function hardReset() {
   stopProgressAnimation();
   currentStory = "";
   currentKeywords = [];
+  currentGeneratedType = "storiella";
   keywordCount = MIN_KEYWORDS;
 
   form.reset();
@@ -760,10 +770,6 @@ chooseFolderMainBtn.addEventListener("click", () => {
   void connectUnifiedFolder();
 });
 
-responseTypeSelect?.addEventListener("change", () => {
-  updateResultTitle(responseTypeSelect.value);
-});
-
 folderInput.addEventListener("change", () => {
   if (!folderInput.files || !folderInput.files.length) {
     return;
@@ -806,7 +812,6 @@ form.addEventListener("submit", async (event) => {
 
   currentKeywords = [...keywords];
   const responseType = responseTypeSelect?.value || "storiella";
-  updateResultTitle(responseType);
 
   setBusyState(true);
   resultSection.classList.add("hidden");
@@ -818,6 +823,8 @@ form.addEventListener("submit", async (event) => {
     stopProgressAnimation();
     updateProgress(100, "Completato");
 
+    currentGeneratedType = responseType;
+    updateResultTitle(responseType);
     showStory(story);
   } catch (error) {
     stopProgressAnimation();
