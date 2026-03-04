@@ -3,6 +3,7 @@ const keywordsContainer = document.querySelector("#keywords-container");
 const addKeywordBtn = document.querySelector("#add-keyword-btn");
 const removeKeywordBtn = document.querySelector("#remove-keyword-btn");
 const keywordCountLabel = document.querySelector("#keyword-count-label");
+const responseTypeSelect = document.querySelector("#response-type");
 const inputError = document.querySelector("#input-error");
 const submitBtn = document.querySelector("#submit-btn");
 const resetBtn = document.querySelector("#reset-btn");
@@ -15,6 +16,7 @@ const loadingPercent = document.querySelector("#loading-percent");
 const loadingBar = document.querySelector("#loading-bar");
 
 const resultSection = document.querySelector("#result-section");
+const resultTitle = document.querySelector("#result-title");
 const storyOutput = document.querySelector("#story-output");
 const wordCounter = document.querySelector("#word-counter");
 const downloadBtn = document.querySelector("#download-btn");
@@ -38,12 +40,6 @@ const CONFIG_DB_NAME = "story-generator-config-db";
 const CONFIG_STORE_NAME = "settings";
 const DIR_HANDLE_KEY = "archiveDirHandle";
 const UI_CONFIG_KEY = "story-ui-config";
-
-const defaultRuntimeConfig = {
-  autoRefreshMs: 4500,
-};
-
-let runtimeConfig = { ...defaultRuntimeConfig };
 let currentStory = "";
 let currentKeywords = [];
 let keywordCount = MIN_KEYWORDS;
@@ -52,6 +48,25 @@ let linkedTxtFiles = [];
 let archiveDirectoryHandle = null;
 let mainStatusTimer = null;
 let activeArchiveFilePath = "";
+
+function getResultTitleByType(responseType) {
+  const titles = {
+    storiella: "La tua storiella",
+    poesia: "La tua poesia",
+    aforisma: "I tuoi aforismi",
+    favola: "La tua favola breve",
+  };
+
+  return titles[responseType] || titles.storiella;
+}
+
+function updateResultTitle(responseType) {
+  if (!resultTitle) {
+    return;
+  }
+
+  resultTitle.textContent = getResultTitleByType(responseType);
+}
 
 function createKeywordInput(index) {
   const wrapper = document.createElement("div");
@@ -183,7 +198,7 @@ function startProgressAnimation() {
   const phases = [
     "Preparazione richiesta...",
     "Invio delle parole all'AI...",
-    "Composizione della storiella...",
+    "Composizione dell'opera'...",
   ];
 
   progressTimer = setInterval(() => {
@@ -203,7 +218,7 @@ function stopProgressAnimation() {
 }
 
 function setLibraryOpen(isOpen) {
-  libraryPanel.classList.toggle("hidden", !isOpen);
+  libraryPanel.classList.toggle("library-collapsed", !isOpen);
   toggleLibraryBtn.textContent = isOpen
     ? "Nascondi archivio .txt"
     : "Mostra archivio .txt";
@@ -269,14 +284,29 @@ function showArchiveStory(text, fileLabel) {
   archiveFileName.textContent = fileLabel || "Nessun file aperto.";
 }
 
-async function generateStoryWithAI(keywords) {
+async function generateStoryWithAI(keywords, responseType) {
+  const responseTypeInstructions = {
+    storiella:
+      "Scrivi una storiella breve in italiano (80-140 parole), in forma narrativa.",
+    poesia:
+      "Scrivi una poesia breve in italiano (8-14 versi), stile semplice e creativo.",
+    aforisma:
+      "Scrivi 3 aforismi brevi in italiano usando tutte le parole in modo naturale.",
+    favola:
+      "Scrivi una favola breve in italiano (90-150 parole) con tono leggero.",
+  };
+
+  const typePrompt =
+    responseTypeInstructions[responseType] ||
+    responseTypeInstructions.storiella;
+
   const prompt = [
-    "Scrivi una storiella breve in italiano (80-140 parole).",
+    typePrompt,
     "Usa TUTTE queste parole chiave in modo naturale: " +
       keywords.join(", ") +
       ".",
     "Tono: creativo ma semplice.",
-    "Niente elenco puntato, una singola storia.",
+    "Niente spiegazioni extra: solo il testo richiesto.",
   ].join(" ");
 
   const body = {
@@ -442,6 +472,7 @@ function hardReset() {
   updateProgress(0, "Preparazione richiesta...");
 
   resultSection.classList.add("hidden");
+  updateResultTitle(responseTypeSelect?.value || "storiella");
   storyOutput.textContent = "";
   wordCounter.textContent = "";
 }
@@ -512,23 +543,6 @@ async function saveArchiveDirectoryHandle(handle) {
 
 async function loadArchiveDirectoryHandle() {
   return idbGet(DIR_HANDLE_KEY);
-}
-
-async function loadRuntimeConfig() {
-  try {
-    const response = await fetch("./app-config.json", { cache: "no-store" });
-    if (!response.ok) {
-      return;
-    }
-
-    const fileConfig = await response.json();
-    runtimeConfig = {
-      ...defaultRuntimeConfig,
-      ...fileConfig,
-    };
-  } catch {
-    runtimeConfig = { ...defaultRuntimeConfig };
-  }
 }
 
 function saveUiConfig(config) {
@@ -726,7 +740,7 @@ removeKeywordBtn.addEventListener("click", () => {
 });
 
 toggleLibraryBtn.addEventListener("click", () => {
-  const isOpen = libraryPanel.classList.contains("hidden");
+  const isOpen = libraryPanel.classList.contains("library-collapsed");
   setLibraryOpen(isOpen);
 });
 
@@ -744,6 +758,10 @@ connectFolderBtn.addEventListener("click", () => {
 
 chooseFolderMainBtn.addEventListener("click", () => {
   void connectUnifiedFolder();
+});
+
+responseTypeSelect?.addEventListener("change", () => {
+  updateResultTitle(responseTypeSelect.value);
 });
 
 folderInput.addEventListener("change", () => {
@@ -787,13 +805,15 @@ form.addEventListener("submit", async (event) => {
   }
 
   currentKeywords = [...keywords];
+  const responseType = responseTypeSelect?.value || "storiella";
+  updateResultTitle(responseType);
 
   setBusyState(true);
   resultSection.classList.add("hidden");
   startProgressAnimation();
 
   try {
-    const story = await generateStoryWithAI(keywords);
+    const story = await generateStoryWithAI(keywords, responseType);
 
     stopProgressAnimation();
     updateProgress(100, "Completato");
@@ -820,8 +840,7 @@ async function init() {
   renderTxtList();
   showArchiveStory("", "Nessun file aperto.");
   updateMainFolderStatus("Nessuna cartella collegata.");
-
-  await loadRuntimeConfig();
+  updateResultTitle(responseTypeSelect?.value || "storiella");
 
   const uiConfig = loadUiConfig();
   setLibraryOpen(Boolean(uiConfig.libraryOpen));

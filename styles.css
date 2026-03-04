@@ -56,6 +56,12 @@
   box-shadow: 0 0 0 3px rgb(220 38 38 / 0.12);
 }
 
+#response-type:focus-visible {
+  outline: 0;
+  border-color: rgb(37 99 235);
+  box-shadow: 0 0 0 3px rgb(37 99 235 / 0.15);
+}
+
 #story-output {
   white-space: pre-wrap;
 }
@@ -100,4 +106,10 @@
   border-color: rgb(37 99 235);
   background: rgb(239 246 255);
   color: rgb(29 78 216);
+}
+
+.library-collapsed {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
 }

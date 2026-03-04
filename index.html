@@ -52,6 +52,23 @@
 
           <form id="story-form" class="space-y-6" novalidate>
             <section>
+              <label
+                for="response-type"
+                class="mb-2 block text-sm font-semibold text-slate-700"
+                >Tipo di risposta AI</label
+              >
+              <select
+                id="response-type"
+                class="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
+              >
+                <option value="storiella" selected>Storiella</option>
+                <option value="poesia">Poesia</option>
+                <option value="aforisma">Aforismi</option>
+                <option value="favola">Favola breve</option>
+              </select>
+            </section>
+
+            <section>
               <div class="mb-3 flex items-center justify-between gap-3">
                 <h2 class="text-sm font-semibold text-slate-700">
                   Parole chiave
@@ -91,7 +108,7 @@
                 type="submit"
                 class="rounded-lg bg-brand-500 px-4 py-2 font-semibold text-white transition hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
               >
-                Genera storia
+                Genera
               </button>
               <button
                 id="reset-btn"
@@ -131,7 +148,10 @@
 
           <section id="result-section" class="mt-8 hidden">
             <div class="mb-3 flex items-center justify-between gap-2">
-              <h2 class="text-lg font-semibold text-slate-900">
+              <h2
+                id="result-title"
+                class="text-lg font-semibold text-slate-900"
+              >
                 La tua storiella
               </h2>
               <span
@@ -165,7 +185,7 @@
 
         <aside
           id="library-panel"
-          class="hidden rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 lg:sticky lg:top-6"
+          class="library-collapsed rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200 lg:sticky lg:top-6"
         >
           <div class="mb-4 flex items-center justify-between gap-2">
             <h2 class="text-base font-semibold text-slate-900">
