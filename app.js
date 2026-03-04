@@ -267,17 +267,194 @@ function renderTxtList() {
 
   linkedTxtFiles.forEach((entry, index) => {
     const listItem = document.createElement("li");
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className =
+    const row = document.createElement("div");
+    row.className = "txt-row";
+
+    const openButton = document.createElement("button");
+    openButton.type = "button";
+    openButton.className =
       entry.path === activeArchiveFilePath
         ? "txt-item txt-item-active"
         : "txt-item";
-    button.textContent = entry.path;
-    button.dataset.fileIndex = String(index);
-    listItem.append(button);
+    openButton.textContent = entry.path;
+    openButton.dataset.fileIndex = String(index);
+    openButton.dataset.action = "open";
+
+    const renameButton = document.createElement("button");
+    renameButton.type = "button";
+    renameButton.className = "txt-action txt-action-rename";
+    renameButton.title = "Rinomina file";
+    renameButton.ariaLabel = "Rinomina file";
+    renameButton.textContent = "✎";
+    renameButton.dataset.fileIndex = String(index);
+    renameButton.dataset.action = "rename";
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "txt-action txt-action-delete";
+    deleteButton.title = "Elimina file";
+    deleteButton.ariaLabel = "Elimina file";
+    deleteButton.textContent = "🗑";
+    deleteButton.dataset.fileIndex = String(index);
+    deleteButton.dataset.action = "delete";
+
+    row.append(openButton, renameButton, deleteButton);
+    listItem.append(row);
     txtList.append(listItem);
   });
+}
+
+function splitArchivePath(path) {
+  const pathParts = path.split("/").filter(Boolean);
+  const fileName = pathParts.pop() || "";
+  return {
+    fileName,
+    folderParts: pathParts,
+  };
+}
+
+async function getNestedDirectoryHandle(
+  rootHandle,
+  folderParts,
+  create = false,
+) {
+  let currentHandle = rootHandle;
+  for (const folderName of folderParts) {
+    currentHandle = await currentHandle.getDirectoryHandle(folderName, {
+      create,
+    });
+  }
+
+  return currentHandle;
+}
+
+async function renameArchiveFile(fileIndex) {
+  const item = linkedTxtFiles[fileIndex];
+  if (!item) {
+    return;
+  }
+
+  if (!archiveDirectoryHandle || item.type !== "handle") {
+    updateLibraryStatus(
+      "Rinomina disponibile solo con cartella collegata in modalità scrittura.",
+      true,
+    );
+    return;
+  }
+
+  const canWrite = await ensureDirectoryPermission(
+    archiveDirectoryHandle,
+    "readwrite",
+    false,
+  );
+  if (!canWrite) {
+    updateLibraryStatus(
+      "Permesso scrittura non disponibile per rinomina.",
+      true,
+    );
+    return;
+  }
+
+  const { fileName, folderParts } = splitArchivePath(item.path);
+  const currentBaseName = fileName.replace(/\.txt$/i, "");
+  const inputName = prompt("Nuovo nome file (.txt):", currentBaseName);
+  if (!inputName) {
+    return;
+  }
+
+  const cleanName = sanitizeForFilename(inputName.trim());
+  if (!cleanName) {
+    updateLibraryStatus("Nome file non valido.", true);
+    return;
+  }
+
+  const nextFileName = `${cleanName}.txt`;
+  if (nextFileName.toLowerCase() === fileName.toLowerCase()) {
+    return;
+  }
+
+  const parentHandle = await getNestedDirectoryHandle(
+    archiveDirectoryHandle,
+    folderParts,
+  );
+
+  try {
+    await parentHandle.getFileHandle(nextFileName);
+    updateLibraryStatus("Esiste già un file con questo nome.", true);
+    return;
+  } catch {
+    // ok: file non esiste
+  }
+
+  const sourceFile = await item.handle.getFile();
+  const sourceText = await sourceFile.text();
+
+  const destinationHandle = await parentHandle.getFileHandle(nextFileName, {
+    create: true,
+  });
+  const writable = await destinationHandle.createWritable();
+  await writable.write(sourceText);
+  await writable.close();
+
+  await parentHandle.removeEntry(fileName);
+
+  const nextPath = [...folderParts, nextFileName].join("/");
+  if (activeArchiveFilePath === item.path) {
+    activeArchiveFilePath = nextPath;
+    archiveFileName.textContent = nextPath;
+    archiveFileName.title = nextPath;
+  }
+
+  updateLibraryStatus(`File rinominato: ${nextFileName}`);
+  await refreshTxtLibrary(false);
+}
+
+async function deleteArchiveFile(fileIndex) {
+  const item = linkedTxtFiles[fileIndex];
+  if (!item) {
+    return;
+  }
+
+  if (!archiveDirectoryHandle || item.type !== "handle") {
+    updateLibraryStatus(
+      "Eliminazione disponibile solo con cartella collegata in modalità scrittura.",
+      true,
+    );
+    return;
+  }
+
+  const canWrite = await ensureDirectoryPermission(
+    archiveDirectoryHandle,
+    "readwrite",
+    false,
+  );
+  if (!canWrite) {
+    updateLibraryStatus(
+      "Permesso scrittura non disponibile per eliminazione.",
+      true,
+    );
+    return;
+  }
+
+  const shouldDelete = confirm(`Eliminare il file ${item.path}?`);
+  if (!shouldDelete) {
+    return;
+  }
+
+  const { fileName, folderParts } = splitArchivePath(item.path);
+  const parentHandle = await getNestedDirectoryHandle(
+    archiveDirectoryHandle,
+    folderParts,
+  );
+  await parentHandle.removeEntry(fileName);
+
+  if (activeArchiveFilePath === item.path) {
+    activeArchiveFilePath = "";
+    showArchiveStory("", "Nessun file aperto.");
+  }
+
+  updateLibraryStatus(`File eliminato: ${fileName}`);
+  await refreshTxtLibrary(false);
 }
 
 function showArchiveStory(text, fileLabel) {
@@ -785,19 +962,36 @@ folderInput.addEventListener("change", () => {
 
 txtList.addEventListener("click", async (event) => {
   const target = event.target;
-  if (!(target instanceof HTMLButtonElement)) {
+  if (!(target instanceof HTMLElement)) {
     return;
   }
 
-  const index = Number(target.dataset.fileIndex);
+  const clickedButton = target.closest("button[data-action]");
+  if (!(clickedButton instanceof HTMLButtonElement)) {
+    return;
+  }
+
+  const index = Number(clickedButton.dataset.fileIndex);
   if (Number.isNaN(index)) {
     return;
   }
 
+  const action = clickedButton.dataset.action;
+
   try {
+    if (action === "rename") {
+      await renameArchiveFile(index);
+      return;
+    }
+
+    if (action === "delete") {
+      await deleteArchiveFile(index);
+      return;
+    }
+
     await openTxtStory(index);
   } catch (error) {
-    updateLibraryStatus("Impossibile leggere il file selezionato.", true);
+    updateLibraryStatus("Operazione sul file non riuscita.", true);
     console.error(error);
   }
 });
