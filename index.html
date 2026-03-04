@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Keyword Story Generator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                50: "#eef6ff",
+                100: "#d8eafe",
+                500: "#2563eb",
+                700: "#1d4ed8",
+              },
+            },
+          },
+        },
+      };
+    </script>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body class="min-h-screen bg-slate-100 text-slate-800">
+    <main class="mx-auto max-w-3xl px-4 py-10">
+      <section
+        class="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-slate-200 md:p-8"
+      >
+        <header class="mb-8">
+          <h1 class="text-2xl font-bold text-slate-900 md:text-3xl">
+            Generatore di Storie da Parole Chiave
+          </h1>
+          <p class="mt-2 text-sm text-slate-600 md:text-base">
+            Scegli quante parole usare, inseriscile una per campo e genera una
+            storiella breve con l'AI.
+          </p>
+        </header>
+
+        <form id="story-form" class="space-y-6" novalidate>
+          <fieldset>
+            <legend class="mb-3 text-sm font-semibold text-slate-700">
+              Quante parole chiave?
+            </legend>
+            <div id="keyword-count-group" class="grid grid-cols-5 gap-2">
+              <label class="count-option">
+                <input type="radio" name="keyword-count" value="1" checked />
+                <span>1</span>
+              </label>
+              <label class="count-option">
+                <input type="radio" name="keyword-count" value="2" />
+                <span>2</span>
+              </label>
+              <label class="count-option">
+                <input type="radio" name="keyword-count" value="3" />
+                <span>3</span>
+              </label>
+              <label class="count-option">
+                <input type="radio" name="keyword-count" value="4" />
+                <span>4</span>
+              </label>
+              <label class="count-option">
+                <input type="radio" name="keyword-count" value="5" />
+                <span>5</span>
+              </label>
+            </div>
+          </fieldset>
+
+          <section>
+            <h2 class="mb-3 text-sm font-semibold text-slate-700">
+              Parole chiave
+            </h2>
+            <div id="keywords-container" class="grid gap-3"></div>
+            <p
+              id="input-error"
+              class="mt-2 hidden text-sm font-medium text-red-600"
+            ></p>
+          </section>
+
+          <div class="flex flex-wrap gap-3">
+            <button
+              id="submit-btn"
+              type="submit"
+              class="rounded-lg bg-brand-500 px-4 py-2 font-semibold text-white transition hover:bg-brand-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2"
+            >
+              Genera storia
+            </button>
+            <button
+              id="reset-btn"
+              type="button"
+              class="rounded-lg border border-slate-300 px-4 py-2 font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              Azzera tutto
+            </button>
+          </div>
+        </form>
+
+        <section id="loading-section" class="mt-8 hidden" aria-live="polite">
+          <div
+            class="mb-2 flex items-center justify-between text-sm font-medium text-slate-600"
+          >
+            <span id="loading-label">Preparazione richiesta...</span>
+            <span id="loading-percent">0%</span>
+          </div>
+          <div class="h-3 w-full overflow-hidden rounded-full bg-slate-200">
+            <div
+              id="loading-bar"
+              class="h-full w-0 rounded-full bg-brand-500 transition-all duration-300"
+            ></div>
+          </div>
+        </section>
+
+        <section id="result-section" class="mt-8 hidden">
+          <div class="mb-3 flex items-center justify-between gap-2">
+            <h2 class="text-lg font-semibold text-slate-900">
+              La tua storiella
+            </h2>
+            <span
+              id="word-counter"
+              class="text-xs font-medium text-slate-500"
+            ></span>
+          </div>
+          <article
+            id="story-output"
+            class="rounded-xl bg-slate-50 p-4 leading-relaxed text-slate-800 ring-1 ring-slate-200"
+          ></article>
+
+          <div class="mt-4 flex flex-wrap gap-3">
+            <button
+              id="download-btn"
+              type="button"
+              class="rounded-lg bg-emerald-600 px-4 py-2 font-semibold text-white transition hover:bg-emerald-700"
+            >
+              Scarica .txt
+            </button>
+            <button
+              id="copy-btn"
+              type="button"
+              class="rounded-lg border border-slate-300 px-4 py-2 font-semibold text-slate-700 transition hover:bg-slate-50"
+            >
+              Copia testo
+            </button>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>
