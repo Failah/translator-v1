@@ -1,6 +1,8 @@
 const form = document.querySelector("#story-form");
-const keywordCountGroup = document.querySelector("#keyword-count-group");
 const keywordsContainer = document.querySelector("#keywords-container");
+const addKeywordBtn = document.querySelector("#add-keyword-btn");
+const removeKeywordBtn = document.querySelector("#remove-keyword-btn");
+const keywordCountLabel = document.querySelector("#keyword-count-label");
 const inputError = document.querySelector("#input-error");
 const submitBtn = document.querySelector("#submit-btn");
 const resetBtn = document.querySelector("#reset-btn");
@@ -21,11 +23,11 @@ const copyBtn = document.querySelector("#copy-btn");
 const toggleLibraryBtn = document.querySelector("#toggle-library-btn");
 const libraryPanel = document.querySelector("#library-panel");
 const closeLibraryBtn = document.querySelector("#close-library-btn");
+const refreshLibraryBtn = document.querySelector("#refresh-library-btn");
 const connectFolderBtn = document.querySelector("#connect-folder-btn");
 const folderInput = document.querySelector("#folder-input");
 const libraryStatus = document.querySelector("#library-status");
 const txtList = document.querySelector("#txt-list");
-const backToCreateBtn = document.querySelector("#back-to-create-btn");
 const archiveFileName = document.querySelector("#archive-file-name");
 const archiveStoryOutput = document.querySelector("#archive-story-output");
 
@@ -44,17 +46,12 @@ const defaultRuntimeConfig = {
 let runtimeConfig = { ...defaultRuntimeConfig };
 let currentStory = "";
 let currentKeywords = [];
+let keywordCount = MIN_KEYWORDS;
 let progressTimer = null;
 let linkedTxtFiles = [];
 let archiveDirectoryHandle = null;
-let autoRefreshTimer = null;
-
-function getSelectedCount() {
-  const selected = keywordCountGroup.querySelector(
-    'input[name="keyword-count"]:checked',
-  );
-  return Number(selected?.value || 1);
-}
+let mainStatusTimer = null;
+let activeArchiveFilePath = "";
 
 function createKeywordInput(index) {
   const wrapper = document.createElement("div");
@@ -79,16 +76,45 @@ function createKeywordInput(index) {
   return wrapper;
 }
 
-function renderKeywordInputs(count) {
-  const safeCount = Math.max(MIN_KEYWORDS, Math.min(MAX_KEYWORDS, count));
+function renderKeywordInputs(
+  count = keywordCount,
+  preservedValues = [],
+  focusIndex = null,
+) {
+  keywordCount = Math.max(MIN_KEYWORDS, Math.min(MAX_KEYWORDS, count));
   keywordsContainer.innerHTML = "";
 
-  for (let i = 1; i <= safeCount; i += 1) {
-    keywordsContainer.append(createKeywordInput(i));
+  for (let i = 1; i <= keywordCount; i += 1) {
+    const inputWrapper = createKeywordInput(i);
+    const input = inputWrapper.querySelector("input");
+    if (input && typeof preservedValues[i - 1] === "string") {
+      input.value = preservedValues[i - 1];
+    }
+    keywordsContainer.append(inputWrapper);
   }
 
-  const firstInput = keywordsContainer.querySelector("input");
-  firstInput?.focus();
+  keywordCountLabel.textContent = `${keywordCount} / ${MAX_KEYWORDS}`;
+  addKeywordBtn.disabled = keywordCount >= MAX_KEYWORDS;
+  removeKeywordBtn.disabled = keywordCount <= MIN_KEYWORDS;
+  addKeywordBtn.classList.toggle("opacity-50", addKeywordBtn.disabled);
+  removeKeywordBtn.classList.toggle("opacity-50", removeKeywordBtn.disabled);
+
+  const nextFocusIndex =
+    focusIndex === null
+      ? 0
+      : Math.max(0, Math.min(keywordCount - 1, Number(focusIndex)));
+  const focusInput = keywordsContainer.querySelector(
+    `#keyword-${nextFocusIndex + 1}`,
+  );
+  if (focusInput instanceof HTMLInputElement) {
+    focusInput.focus();
+  }
+}
+
+function getCurrentKeywordValues() {
+  return Array.from(keywordsContainer.querySelectorAll("input")).map(
+    (input) => input.value,
+  );
 }
 
 function showInputError(message) {
@@ -187,14 +213,28 @@ function setLibraryOpen(isOpen) {
 
 function updateLibraryStatus(message, isError = false) {
   libraryStatus.textContent = message;
+  libraryStatus.title = message || "";
   libraryStatus.classList.toggle("text-red-600", isError);
   libraryStatus.classList.toggle("text-slate-500", !isError);
 }
 
-function updateMainFolderStatus(message, isError = false) {
+function updateMainFolderStatus(message, isError = false, autoHideMs = 0) {
+  if (mainStatusTimer) {
+    clearTimeout(mainStatusTimer);
+    mainStatusTimer = null;
+  }
+
   folderStatusMain.textContent = message;
   folderStatusMain.classList.toggle("text-red-600", isError);
   folderStatusMain.classList.toggle("text-slate-500", !isError);
+
+  if (autoHideMs > 0 && message) {
+    mainStatusTimer = setTimeout(() => {
+      folderStatusMain.textContent = "";
+      folderStatusMain.classList.remove("text-red-600");
+      folderStatusMain.classList.add("text-slate-500");
+    }, autoHideMs);
+  }
 }
 
 function renderTxtList() {
@@ -213,7 +253,10 @@ function renderTxtList() {
     const listItem = document.createElement("li");
     const button = document.createElement("button");
     button.type = "button";
-    button.className = "txt-item";
+    button.className =
+      entry.path === activeArchiveFilePath
+        ? "txt-item txt-item-active"
+        : "txt-item";
     button.textContent = entry.path;
     button.dataset.fileIndex = String(index);
     listItem.append(button);
@@ -389,13 +432,9 @@ function hardReset() {
   stopProgressAnimation();
   currentStory = "";
   currentKeywords = [];
+  keywordCount = MIN_KEYWORDS;
 
   form.reset();
-  const defaultRadio = keywordCountGroup.querySelector('input[value="1"]');
-  if (defaultRadio) {
-    defaultRadio.checked = true;
-  }
-
   clearInputError();
   renderKeywordInputs(1);
 
@@ -548,6 +587,11 @@ function loadTxtFilesFromInput(fileList) {
     updateLibraryStatus("Cartella collegata, ma non contiene file .txt.", true);
   }
 
+  if (!linkedTxtFiles.some((entry) => entry.path === activeArchiveFilePath)) {
+    activeArchiveFilePath = "";
+    showArchiveStory("", "Nessun file aperto.");
+  }
+
   renderTxtList();
 }
 
@@ -590,6 +634,11 @@ async function refreshTxtLibrary(showErrors = true) {
       );
     }
 
+    if (!linkedTxtFiles.some((entry) => entry.path === activeArchiveFilePath)) {
+      activeArchiveFilePath = "";
+      showArchiveStory("", "Nessun file aperto.");
+    }
+
     renderTxtList();
   } catch (error) {
     if (showErrors) {
@@ -597,16 +646,6 @@ async function refreshTxtLibrary(showErrors = true) {
     }
     console.error(error);
   }
-}
-
-function startAutoRefreshLibrary() {
-  if (autoRefreshTimer) {
-    clearInterval(autoRefreshTimer);
-  }
-
-  autoRefreshTimer = setInterval(() => {
-    void refreshTxtLibrary(false);
-  }, runtimeConfig.autoRefreshMs);
 }
 
 async function connectUnifiedFolder() {
@@ -640,9 +679,8 @@ async function connectUnifiedFolder() {
 
     setLibraryOpen(true);
     await refreshTxtLibrary();
-    startAutoRefreshLibrary();
   } catch (error) {
-    updateMainFolderStatus("Collegamento cartella annullato.");
+    updateMainFolderStatus("Collegamento cartella annullato.", false, 3000);
     console.error(error);
   }
 }
@@ -661,12 +699,29 @@ async function openTxtStory(fileIndex) {
     return;
   }
 
+  activeArchiveFilePath = item.path;
+  renderTxtList();
   showArchiveStory(content, item.path);
   updateLibraryStatus(`Aperto: ${item.path}`);
 }
 
-keywordCountGroup.addEventListener("change", () => {
-  renderKeywordInputs(getSelectedCount());
+addKeywordBtn.addEventListener("click", () => {
+  if (keywordCount >= MAX_KEYWORDS) {
+    return;
+  }
+
+  const preservedValues = getCurrentKeywordValues();
+  renderKeywordInputs(keywordCount + 1, preservedValues, keywordCount);
+  clearInputError();
+});
+
+removeKeywordBtn.addEventListener("click", () => {
+  if (keywordCount <= MIN_KEYWORDS) {
+    return;
+  }
+
+  const preservedValues = getCurrentKeywordValues().slice(0, keywordCount - 1);
+  renderKeywordInputs(keywordCount - 1, preservedValues, keywordCount - 2);
   clearInputError();
 });
 
@@ -679,18 +734,16 @@ closeLibraryBtn.addEventListener("click", () => {
   setLibraryOpen(false);
 });
 
+refreshLibraryBtn.addEventListener("click", () => {
+  void refreshTxtLibrary();
+});
+
 connectFolderBtn.addEventListener("click", () => {
   void connectUnifiedFolder();
 });
 
 chooseFolderMainBtn.addEventListener("click", () => {
   void connectUnifiedFolder();
-});
-
-backToCreateBtn.addEventListener("click", () => {
-  setLibraryOpen(false);
-  const firstInput = keywordsContainer.querySelector("input");
-  firstInput?.focus();
 });
 
 folderInput.addEventListener("change", () => {
@@ -815,7 +868,6 @@ async function init() {
     );
 
     await refreshTxtLibrary();
-    startAutoRefreshLibrary();
   } catch (error) {
     console.error(error);
   }
