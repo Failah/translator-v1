@@ -20,6 +20,7 @@ const MAX_KEYWORDS = 5;
 const MIN_KEYWORDS = 1;
 
 let currentStory = "";
+let currentKeywords = [];
 let progressTimer = null;
 
 function getSelectedCount() {
@@ -173,6 +174,8 @@ async function generateStoryWithAI(keywords) {
 
   const response = await fetch("https://text.pollinations.ai/openai", {
     method: "POST",
+    credentials: "omit",
+    referrerPolicy: "no-referrer",
     headers: {
       "Content-Type": "application/json",
     },
@@ -218,11 +221,12 @@ function downloadStoryAsTxt() {
   }
 
   const now = new Date();
-  const datePart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  const firstWord = sanitizeForFilename(
-    currentStory.split(/\s+/)[0] || "storia",
-  );
-  const filename = `storia-${firstWord || "ai"}-${datePart}.txt`;
+  const datePart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}-${String(now.getMinutes()).padStart(2, "0")}`;
+  const promptWordsPart = currentKeywords
+    .map((word) => sanitizeForFilename(word))
+    .filter(Boolean)
+    .join("-");
+  const filename = `storia-${promptWordsPart || "ai"}-${datePart}.txt`;
 
   const blob = new Blob([currentStory], { type: "text/plain;charset=utf-8" });
   const url = URL.createObjectURL(blob);
@@ -265,6 +269,7 @@ function setBusyState(isBusy) {
 function hardReset() {
   stopProgressAnimation();
   currentStory = "";
+  currentKeywords = [];
 
   form.reset();
   const defaultRadio = keywordCountGroup.querySelector('input[value="1"]');
@@ -295,6 +300,8 @@ form.addEventListener("submit", async (event) => {
   if (!keywords) {
     return;
   }
+
+  currentKeywords = [...keywords];
 
   setBusyState(true);
   resultSection.classList.add("hidden");
